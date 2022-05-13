@@ -1,0 +1,28 @@
+{
+  "name": "vdm-okular-plugin",
+  "version": "0.1.0",
+  "description": "VDM plugin for Okular.",
+  "keywords": [
+    "Okular"
+  ],
+  "author": "Mark Hong",
+  "license": "GPL-3.0",
+
+  "main": "okular_plugin.py",
+  "capability": [
+    "inotify-lookup"
+  ],
+  "scripts": {
+    "pre-install": "mkdir release; cp *.py release",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+
+  "homepage": "https://github.com/VDM-Maintainer-Group/vdm-okular-plugin#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VDM-Maintainer-Group/vdm-okular-plugin.git"
+  },
+  "bugs": {
+    "url": "https://github.com/VDM-Maintainer-Group/vdm-okular-plugin/issues"
+  }
+}
