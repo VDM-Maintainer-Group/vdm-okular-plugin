@@ -1,81 +1,115 @@
 #!/usr/bin/env python3
-import os
-import time
+import os, time, json, dbus
+import subprocess as sp
 from pathlib import Path
 from pyvdm.interface import CapabilityLibrary, SRC_API
 
+DBG = 1
+SLOT = 0.40
 PROG_NAME = 'okular'
 
 class OkularPlugin(SRC_API):
-    @staticmethod
-    def _gather_record(raw_result):
-        record = dict()
-        for item in raw_result:
-            pid, path = item.split(',', maxsplit=1)
-            pid  = int(pid)
-            path = path.rstrip('\u0000')
-            #
-            if pid not in record.keys():
-                record[pid] = [path]
-            else:
-                record[pid].append(path)
-            pass
-        return record
+    def _gather_records(self):
+        sess = dbus.SessionBus()
+        dbus_iface = dbus.Interface(sess.get_object('org.freedesktop.DBus', '/'),
+                    dbus_interface='org.freedesktop.DBus')
+        okular_names = filter(lambda x:x.startswith('org.kde.okular'), sess.list_names())
+        records = dict()
 
-    @staticmethod
-    def _dump_record(fh, record):
-        for pid, items in record.items():
-            for _path in items:
-                if 'icon-theme.cache' not in _path:
-                    fh.write( _path+'\n' )
+        for _name in okular_names:
+            ## get content status from dbus
+            _iface = dbus.Interface(sess.get_object(_name, '/okular'),
+                    dbus_interface='org.kde.okular')
+            _path  = _iface.currentDocument()
+            _page  = _iface.currentPage()
+            ## get window status from x11
+            _pid = dbus_iface.GetConnectionUnixProcessID(_name)
+            _window = self.xm.get_windows_by_pid(_pid)[0]
+            ##
+            records[_path] = {
+                'page': _page,
+                'window':{
+                    'desktop': _window['desktop'],
+                    'states':  _window['states'],
+                    'xyhw':    _window['xyhw']
+                }
+            }
+            pass
+
+        return records
+
+    def _rearrange_window(self, records):
+        _time = time.time()
+        _limit = len(records) * SLOT
+        sess = dbus.SessionBus()
+        dbus_iface = dbus.Interface(sess.get_object('org.freedesktop.DBus', '/'),
+                    dbus_interface='org.freedesktop.DBus')
+
+        okular_names = list()
+        while len(okular_names)<len(records) or time.time()-_time<_limit:
+            okular_names = list( filter(lambda x:x.startswith('org.kde.okular'), sess.list_names()) )
+
+        for _name in okular_names:
+            try:
+                _pid = dbus_iface.GetConnectionUnixProcessID(_name)
+                _status = records[ _iface.currentDocument() ]
+                _window = self.xm.get_windows_by_pid(_pid)[0]
+                ##
+                _iface = dbus.Interface(sess.get_object(_name, '/okular'),
+                        dbus_interface='org.kde.okular')
+                _iface.goToPage( _status['page'] )
+                ##
+                s = _status['window']
+                self.xm.set_window_by_xid(_window['xid'], s['desktop'], s['states'], s['xyhw'])
+            except:
+                pass     
         pass
 
     def onStart(self):
-        self.il = CapabilityLibrary.CapabilityHandleLocal('inotify-lookup')
-        self.il.register( PROG_NAME )
+        self.xm = CapabilityLibrary.CapabilityHandleLocal('x11-manager')
         return 0
 
     def onStop(self):
-        self.il.unregister( PROG_NAME )
         return 0
 
     def onSave(self, stat_file):
-        # dump raw_result via il
-        raw_result = self.il.dump( PROG_NAME )
-        # gathering record from raw_result
-        record = self._gather_record(raw_result)
-        # write to file
+        ## gathering records
+        records = self._gather_records()
+        ## write to file
         with open(stat_file, 'w') as f:
-            self._dump_record(f, record)
+            json.dump(records, f)
             pass
         return 0
 
     def onResume(self, stat_file):
+        ## load stat file with failure check
         with open(stat_file, 'r') as f:
-            items = f.readlines()
-            for piece in items:
-                os.system( f'{PROG_NAME} {piece}' )
-            pass
-        time.sleep(1.5)
+            _file = f.read().strip()
+        if len(_file)==0:
+            return 0
+        else:
+            try:
+                records = json.loads(_file)
+            except:
+                return -1
+        ## open windows
+        for item in records.keys():
+            sp.Popen([ PROG_NAME, item['path'] ], start_new_session=True)
+        ## rearrange windows by title
+        self._rearrange_window(records)
         return 0
 
     def onClose(self):
+        ## force close all
         os.system( f'killall {PROG_NAME}' )
         return 0
     pass
 
 if __name__ == '__main__':
-    import sys, json
     _plugin = OkularPlugin()
     _plugin.onStart()
 
-    # dump raw_result via il
-    raw_result = _plugin.il.dump( PROG_NAME )
-
-    # gathering record from raw_result
-    record = _plugin._gather_record(raw_result)
-    print( json.dumps(record, indent=4) )
-    
-    # write to file
-    _plugin._dump_record(sys.stdout, record)
+    ## gathering records
+    records = _plugin._gather_records()
+    print( json.dumps(records, indent=4) )
     pass
