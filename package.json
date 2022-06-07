@@ -1,6 +1,6 @@
 {
   "name": "vdm-okular-plugin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "VDM plugin for Okular.",
   "keywords": [
     "Okular"
@@ -10,10 +10,10 @@
 
   "main": "okular_plugin.py",
   "capability": [
-    "inotify-lookup"
+    "x11-manager"
   ],
   "scripts": {
-    "pre-install": "mkdir release; cp *.py release",
+    "pre-install": "mkdir release; mv *.py release",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
 
