@@ -8,6 +8,11 @@ DBG = 1
 SLOT = 0.40
 PROG_NAME = 'okular'
 
+from pyvdm.core.ApplicationManager import ApplicationManager as AM
+TARGET = 'org.kde.okular'
+APP = AM.get_application(TARGET)
+PROG_EXEC = APP['exec'].split()[0]
+
 class OkularPlugin(SRC_API):
     def _gather_records(self):
         sess = dbus.SessionBus()
@@ -81,7 +86,7 @@ class OkularPlugin(SRC_API):
             pass
         return 0
 
-    def onResume(self, stat_file):
+    def onResume(self, stat_file, new):
         ## load stat file with failure check
         with open(stat_file, 'r') as f:
             _file = f.read().strip()
@@ -94,7 +99,7 @@ class OkularPlugin(SRC_API):
                 return -1
         ## open windows
         for item in records.keys():
-            sp.Popen([ PROG_NAME, item['path'] ], start_new_session=True)
+            sp.Popen([ PROG_EXEC, item['path'] ], start_new_session=True)
         ## rearrange windows by title
         self._rearrange_window(records)
         return 0
